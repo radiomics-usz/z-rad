@@ -64,6 +64,7 @@ def process_patient_folder(input_params, patient_folder, structure_set):
         structure_set = get_all_structure_names(rtstruct_path)
 
     if structure_set:
+        mask_union = None
         for mask_name in structure_set:
             mask = load_mask(input_params, patient_folder, mask_name, image)
             if mask and mask.array is not None:
@@ -77,6 +78,17 @@ def process_patient_folder(input_params, patient_folder, structure_set):
                 # Save new mask
                 output_path = os.path.join(input_params["output_directory"], patient_folder, f'{mask_name}.nii.gz')
                 mask_new.save_as_nifti(output_path)
+
+                if input_params["mask_union"]:
+                    import numpy as np
+                    if mask_union:
+                        mask_union.array = np.bitwise_or(mask_union.array, mask_new.array).astype(np.int16)
+                    else:
+                        mask_union = mask_new.copy()
+
+        if mask_union:
+            output_path = os.path.join(input_params["output_directory"], patient_folder, f'mask_union.nii.gz')
+            mask_union.save_as_nifti(output_path)
 
 
 class PreprocessingTab(BaseTab):
@@ -160,6 +172,11 @@ class PreprocessingTab(BaseTab):
         self.resample_resolution_text_field = CustomTextField(
             "E.g. 1", 420, 380, 90, 50, self
         )
+
+        # Mask union
+        self.mask_union_check_box = CustomCheckBox(
+            'Mask Union',
+            580, 380, 150, 50, self)
 
         # Image Interpolation Method ComboBox
         self.image_interpolation_method_combo_box = CustomBox(
@@ -372,6 +389,7 @@ class PreprocessingTab(BaseTab):
             'input_imaging_modality': self.input_imaging_mod_combo_box.currentText(),
             'just_save_as_nifti': self.just_save_as_nifti_check_box.checkState(),
             'use_all_structures': self.use_all_structures_check_box.checkState(),
+            'mask_union': self.mask_union_check_box.checkState(),
         }
         self.input_params = input_parameters
 
@@ -468,6 +486,7 @@ class PreprocessingTab(BaseTab):
                     data.get('prep_input_imaging_modality', 'Imaging Modality:'))
                 self.just_save_as_nifti_check_box.setCheckState(data.get('prep_just_save_as_nifti', 0))
                 self.use_all_structures_check_box.setCheckState(data.get('prep_use_all_structures', 0))
+                self.mask_union_check_box.setCheckState(data.get('prep_mask_union', 0))
 
         except FileNotFoundError:
             print("No previous data found!")
