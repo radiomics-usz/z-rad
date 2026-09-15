@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pytest
+from ibsi_cases import IBSI_I_FEATURE_CASES
 from ibsi_helpers import load_references, matches_reference, select_ibsi_i_references
 
 from zrad.image import Image
@@ -212,113 +213,53 @@ def res3d_2mm_image_spline(dcm_ct_phantom_image):
     return res_image
 
 
-@pytest.mark.integration
-@pytest.mark.parametrize(
-    ('aggr_dim', 'aggr_method'), [('2D', 'AVER'), ('2D', 'SLICE_MERG'), ('2.5D', 'DIR_MERG'), ('2.5D', 'MERG')]
-)
-def test_ibsi_i_config_a(dcm_ct_phantom_image, dcm_ct_phantom_mask, aggr_dim, aggr_method):
-    reference = select_ibsi_i_references(ibsi_i_feature_tolerances('config_A'), aggr_dim, aggr_method)
-    features = _extract_features(
-        dcm_ct_phantom_image,
-        dcm_ct_phantom_mask,
-        aggr_dim=aggr_dim,
-        aggr_method=aggr_method,
-        intensity_range=[-500, 400],
-        bin_size=25,
-        ivh_method='direct',
-    )
+def _ibsi_i_cases(config):
+    return tuple(case for case in IBSI_I_FEATURE_CASES if case.config == config)
+
+
+def _run_ibsi_i_feature_case(case, image, mask, families=None):
+    reference_name = 'digital_phantom' if case.config == 'digital' else f'config_{case.config}'
+    reference = select_ibsi_i_references(ibsi_i_feature_tolerances(reference_name), *case.aggregation)
+    features = _extract_features(image, mask, *case.aggregation, families=families, **dict(case.preparation))
     ibsi_i_validation(reference, features)
 
 
 @pytest.mark.integration
-@pytest.mark.parametrize(
-    ('aggr_dim', 'aggr_method'), [('2D', 'AVER'), ('2D', 'SLICE_MERG'), ('2.5D', 'DIR_MERG'), ('2.5D', 'MERG')]
-)
-def test_ibsi_i_config_b(res2d_2mm_image_linear, res2d_2mm_mask_linear, aggr_dim, aggr_method):
-    reference = select_ibsi_i_references(ibsi_i_feature_tolerances('config_B'), aggr_dim, aggr_method)
-    features = _extract_features(
-        res2d_2mm_image_linear,
-        res2d_2mm_mask_linear,
-        aggr_dim=aggr_dim,
-        aggr_method=aggr_method,
-        intensity_range=[-500, 400],
-        number_of_bins=32,
-        ivh_method='direct',
-    )
-    ibsi_i_validation(reference, features)
+@pytest.mark.parametrize('case', _ibsi_i_cases('A'), ids=lambda case: case.identifier)
+def test_ibsi_i_config_a(dcm_ct_phantom_image, dcm_ct_phantom_mask, case):
+    _run_ibsi_i_feature_case(case, dcm_ct_phantom_image, dcm_ct_phantom_mask)
 
 
 @pytest.mark.integration
-@pytest.mark.parametrize(('aggr_dim', 'aggr_method'), [('3D', 'AVER'), ('3D', 'MERG')])
-def test_ibsi_i_config_c(res3d_2mm_image_linear, res3d_2mm_mask_linear, aggr_dim, aggr_method):
-    reference = select_ibsi_i_references(ibsi_i_feature_tolerances('config_C'), aggr_dim, aggr_method)
-    features = _extract_features(
-        res3d_2mm_image_linear,
-        res3d_2mm_mask_linear,
-        aggr_dim=aggr_dim,
-        aggr_method=aggr_method,
-        intensity_range=[-1000, 400],
-        bin_size=25,
-        ivh_method='fixed_bin_size',
-        ivh_bin_size=2.5,
-    )
-    ibsi_i_validation(reference, features)
+@pytest.mark.parametrize('case', _ibsi_i_cases('B'), ids=lambda case: case.identifier)
+def test_ibsi_i_config_b(res2d_2mm_image_linear, res2d_2mm_mask_linear, case):
+    _run_ibsi_i_feature_case(case, res2d_2mm_image_linear, res2d_2mm_mask_linear)
 
 
 @pytest.mark.integration
-@pytest.mark.parametrize(('aggr_dim', 'aggr_method'), [('3D', 'AVER'), ('3D', 'MERG')])
-def test_ibsi_i_config_d(res3d_2mm_image_linear, res3d_2mm_mask_linear, aggr_dim, aggr_method):
-    reference = select_ibsi_i_references(ibsi_i_feature_tolerances('config_D'), aggr_dim, aggr_method)
-    features = _extract_features(
-        res3d_2mm_image_linear,
-        res3d_2mm_mask_linear,
-        aggr_dim=aggr_dim,
-        aggr_method=aggr_method,
-        outlier_range=3,
-        number_of_bins=32,
-        ivh_method='direct',
-    )
-    ibsi_i_validation(reference, features)
+@pytest.mark.parametrize('case', _ibsi_i_cases('C'), ids=lambda case: case.identifier)
+def test_ibsi_i_config_c(res3d_2mm_image_linear, res3d_2mm_mask_linear, case):
+    _run_ibsi_i_feature_case(case, res3d_2mm_image_linear, res3d_2mm_mask_linear)
 
 
 @pytest.mark.integration
-@pytest.mark.parametrize(('aggr_dim', 'aggr_method'), [('3D', 'AVER'), ('3D', 'MERG')])
-def test_ibsi_i_config_e(res3d_2mm_image_spline, res3d_2mm_mask_linear, aggr_dim, aggr_method):
-    reference = select_ibsi_i_references(ibsi_i_feature_tolerances('config_E'), aggr_dim, aggr_method)
-    features = _extract_features(
-        res3d_2mm_image_spline,
-        res3d_2mm_mask_linear,
-        aggr_dim=aggr_dim,
-        aggr_method=aggr_method,
-        intensity_range=[-1000, 400],
-        outlier_range=3,
-        number_of_bins=32,
-        ivh_method='fixed_bin_number',
-        ivh_number_of_bins=1000,
-    )
-    ibsi_i_validation(reference, features)
+@pytest.mark.parametrize('case', _ibsi_i_cases('D'), ids=lambda case: case.identifier)
+def test_ibsi_i_config_d(res3d_2mm_image_linear, res3d_2mm_mask_linear, case):
+    _run_ibsi_i_feature_case(case, res3d_2mm_image_linear, res3d_2mm_mask_linear)
 
 
 @pytest.mark.integration
-@pytest.mark.parametrize(
-    ('aggr_dim', 'aggr_method'),
-    [
-        ('2D', 'AVER'),
-        ('2D', 'SLICE_MERG'),
-        ('2.5D', 'DIR_MERG'),
-        ('2.5D', 'MERG'),
-        ('3D', 'AVER'),
-        ('3D', 'MERG'),
-    ],
-)
-def test_ibsi_i_digital_phantom(ibsi_i_digital_data_dir, aggr_dim, aggr_method):
+@pytest.mark.parametrize('case', _ibsi_i_cases('E'), ids=lambda case: case.identifier)
+def test_ibsi_i_config_e(res3d_2mm_image_spline, res3d_2mm_mask_linear, case):
+    _run_ibsi_i_feature_case(case, res3d_2mm_image_spline, res3d_2mm_mask_linear)
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize('case', _ibsi_i_cases('digital'), ids=lambda case: case.identifier)
+def test_ibsi_i_digital_phantom(ibsi_i_digital_data_dir, case):
     image = Image.from_nifti(ibsi_i_digital_data_dir / 'nifti' / 'image' / 'phantom.nii.gz')
     mask = Image.from_nifti(ibsi_i_digital_data_dir / 'nifti' / 'mask' / 'mask.nii.gz')
-    reference = select_ibsi_i_references(ibsi_i_feature_tolerances('digital_phantom'), aggr_dim, aggr_method)
-    features = _extract_features(
-        image, mask, aggr_dim, aggr_method, number_of_bins=6, ivh_method='direct', families='all'
-    )
-    ibsi_i_validation(reference, features)
+    _run_ibsi_i_feature_case(case, image, mask, families='all')
 
 
 def _diagnostic_values(image, roi, stage):

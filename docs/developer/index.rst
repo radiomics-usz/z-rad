@@ -11,6 +11,7 @@ maintainer release process.
    contributing
    development_environment
    testing
+   benchmarking
    code_quality
    building_docs
    ci

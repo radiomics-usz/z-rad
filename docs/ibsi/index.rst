@@ -83,6 +83,12 @@ should not be interpreted as counts of independent feature definitions.
        ROI minimum, median, and maximum SUV for valid objects.
      - SUV checks are separate from radiomic-feature comparisons.
 
+The performance ``exhaustive`` tier measures all 20 IBSI I
+feature/aggregation cases, 33 IBSI II phase-I response maps, and 18 IBSI II
+phase-II feature configurations through the shared ``tests/ibsi_cases.py``
+registry. These timing and memory measurements are separate from numerical
+agreement checks. See :doc:`../developer/benchmarking` for the methodology.
+
 Reference Limitations
 ---------------------
 

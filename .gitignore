@@ -113,3 +113,9 @@ config.json
 
 # Disposable IBSI-SUV extraction (other IBSI archives use .cache/)
 /tests/data/IBSI_SUV/
+
+# Local performance results and allocation captures
+.benchmarks/
+.benchmark-runs/
+memray-*.bin
+*.memray

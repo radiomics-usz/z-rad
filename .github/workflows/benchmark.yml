@@ -1,0 +1,121 @@
+---
+name: Performance benchmarks
+
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [master]
+  schedule:
+    - cron: "17 2 * * 1"
+  # Suite choice changes benchmark reports; this workflow does not build software.
+  # checkov:skip=CKV_GHA_7:Manual input selects a fixed benchmark suite.
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: Benchmark suite
+        type: choice
+        options: [standard, ibsi, exhaustive]
+        default: standard
+
+permissions:
+  contents: read
+
+concurrency:
+  group: performance-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  timing:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    env:
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS: "1"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Resolve latest published release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          if tag=$(gh api "repos/$GH_REPO/releases/latest" --jq .tag_name 2>release-lookup.log); then
+            printf 'tag=%s\n' "$tag" >> "$GITHUB_OUTPUT"
+          else
+            echo "No release resolved; PR/master comparison will still run."
+            cat release-lookup.log
+          fi
+      - name: Compare isolated revisions on this runner
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          REQUESTED_SUITE: ${{ inputs.suite }}
+          EVENT_NAME: ${{ github.event_name }}
+        shell: bash
+        run: |
+          suite="${REQUESTED_SUITE:-standard}"
+          if [[ "$EVENT_NAME" == "schedule" ]]; then suite=exhaustive; fi
+          args=(--current HEAD --master origin/master --suite "$suite" --output reports/benchmarks/ci)
+          if [[ -n "$RELEASE_TAG" ]]; then args+=(--release "$RELEASE_TAG"); fi
+          python tests/benchmarks/compare_revisions.py "${args[@]}"
+      - name: Display comparison
+        if: always()
+        shell: bash
+        run: |
+          if [[ -f reports/benchmarks/ci/comparison.txt ]]; then
+            {
+              echo '```text'
+              cat reports/benchmarks/ci/comparison.txt
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Upload timing and environment artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: performance-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            reports/benchmarks/ci/
+            release-lookup.log
+          retention-days: 30
+          if-no-files-found: warn
+
+  memory:
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.suite == 'exhaustive')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    env:
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS: "1"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Install test environment
+        run: python -m pip install -e '.[test]'
+      - name: Check exhaustive timing and memory case parity
+        run: python tests/benchmarks/run.py --suite exhaustive --collect-only -q
+      - name: Measure all 151 exhaustive peak RSS cases in isolated processes
+        run: python tests/benchmarks/memory.py --mode rss --suite exhaustive --output reports/benchmarks/rss-exhaustive.json
+      - name: Upload memory artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: performance-memory-${{ github.run_id }}-${{ github.run_attempt }}
+          path: reports/benchmarks/rss-exhaustive.json
+          retention-days: 30
+          if-no-files-found: warn

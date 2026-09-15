@@ -2,6 +2,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from ibsi_cases import IBSI_II_FEATURE_CASES, IBSI_II_FILTER_CASES
 from ibsi_helpers import load_references, matches_reference
 
 from zrad.filtering import create_filter
@@ -15,6 +16,24 @@ from zrad.preprocessing import (
     TextureDiscretizer,
 )
 from zrad.radiomics import Radiomics
+
+
+def _phase_i_cases(prefix):
+    return tuple(case for case in IBSI_II_FILTER_CASES if case.config.startswith(prefix))
+
+
+def _phase_i_case(config):
+    return next(case for case in IBSI_II_FILTER_CASES if case.config == config)
+
+
+def _phase_ii_case(config):
+    return next(case for case in IBSI_II_FEATURE_CASES if case.config == config)
+
+
+def _phase_ii_filter(config):
+    case = _phase_ii_case(config)
+    assert case.filter_method is not None
+    return create_filter(filtering_method=case.filter_method, **dict(case.filter_params))
 
 
 def _run_ph_i_case(filtering, phantom, filename, config, data_dir):
@@ -179,15 +198,18 @@ def pattern_1_phantom(ibsi_ii_digital_data_dir):
 @pytest.mark.integration
 @pytest.mark.parametrize(
     ('config', 'params_and_images'),
-    list(
-        {
-            '1.a.1': ['constant', '3D', 'checkerboard_phantom', '1_a_1-ValidCRM.nii'],
-            '1.a.2': ['nearest', '3D', 'checkerboard_phantom', '1_a_2-ValidCRM.nii'],
-            '1.a.3': ['wrap', '3D', 'checkerboard_phantom', '1_a_3-ValidCRM.nii'],
-            '1.a.4': ['reflect', '3D', 'checkerboard_phantom', '1_a_4-ValidCRM.nii'],
-            '1.b.1': ['constant', '2D', 'impulse_phantom', '1_b_1-ValidCRM.nii'],
-        }.items()
-    ),
+    [
+        (
+            case.config,
+            [
+                case.filter_params['padding_type'],
+                case.filter_params['dimensionality'],
+                f'{case.phantom}_phantom',
+                case.response_map,
+            ],
+        )
+        for case in _phase_i_cases('1.')
+    ],
 )
 def test_ibsi_ii_ph_i_1(ibsi_ii_response_maps_dir, request, config, params_and_images):
     params_and_images = list(params_and_images)
@@ -201,13 +223,19 @@ def test_ibsi_ii_ph_i_1(ibsi_ii_response_maps_dir, request, config, params_and_i
 @pytest.mark.integration
 @pytest.mark.parametrize(
     ('config', 'params_and_images'),
-    list(
-        {
-            '2.a': ['constant', '3D', 3.0, 'impulse_phantom', '2_a-ValidCRM.nii'],
-            '2.b': ['reflect', '3D', 5.0, 'checkerboard_phantom', '2_b-ValidCRM.nii'],
-            '2.c': ['reflect', '2D', 5.0, 'checkerboard_phantom', '2_c-ValidCRM.nii'],
-        }.items()
-    ),
+    [
+        (
+            case.config,
+            [
+                case.filter_params['padding_type'],
+                case.filter_params['dimensionality'],
+                case.filter_params['sigma_mm'],
+                f'{case.phantom}_phantom',
+                case.response_map,
+            ],
+        )
+        for case in _phase_i_cases('2.')
+    ],
 )
 def test_ibsi_ii_ph_i_2(ibsi_ii_response_maps_dir, request, config, params_and_images):
     params_and_images = list(params_and_images)
@@ -225,19 +253,23 @@ def test_ibsi_ii_ph_i_2(ibsi_ii_response_maps_dir, request, config, params_and_i
 @pytest.mark.integration
 @pytest.mark.parametrize(
     ('config', 'params_and_images'),
-    list(
-        {
-            '3.a.1': ['constant', '3D', 'E5L5S5', False, None, False, 0, 'impulse_phantom', '3_a_1-ValidCRM.nii'],
-            '3.a.2': ['constant', '3D', 'E5L5S5', True, 'max', False, 0, 'impulse_phantom', '3_a_2-ValidCRM.nii'],
-            '3.a.3': ['constant', '3D', 'E5L5S5', True, 'max', True, 7, 'impulse_phantom', '3_a_3-ValidCRM.nii'],
-            '3.b.1': ['reflect', '3D', 'E3W5R5', False, None, False, 0, 'checkerboard_phantom', '3_b_1-ValidCRM.nii'],
-            '3.b.2': ['reflect', '3D', 'E3W5R5', True, 'max', False, 0, 'checkerboard_phantom', '3_b_2-ValidCRM.nii'],
-            '3.b.3': ['reflect', '3D', 'E3W5R5', True, 'max', True, 7, 'checkerboard_phantom', '3_b_3-ValidCRM.nii'],
-            '3.c.1': ['reflect', '2D', 'L5S5', False, None, False, 0, 'checkerboard_phantom', '3_c_1-ValidCRM.nii'],
-            '3.c.2': ['reflect', '2D', 'L5S5', True, 'max', False, 0, 'checkerboard_phantom', '3_c_2-ValidCRM.nii'],
-            '3.c.3': ['reflect', '2D', 'L5S5', True, 'max', True, 7, 'checkerboard_phantom', '3_c_3-ValidCRM.nii'],
-        }.items()
-    ),
+    [
+        (
+            case.config,
+            [
+                case.filter_params['padding_type'],
+                case.filter_params['dimensionality'],
+                case.filter_params['response_map'],
+                case.filter_params['rotation_invariance'],
+                case.filter_params['pooling'],
+                case.filter_params['energy_map'],
+                case.filter_params['distance'],
+                f'{case.phantom}_phantom',
+                case.response_map,
+            ],
+        )
+        for case in _phase_i_cases('3.')
+    ],
 )
 def test_ibsi_ii_ph_i_3(ibsi_ii_response_maps_dir, request, config, params_and_images):
     params_and_images = list(params_and_images)
@@ -335,33 +367,43 @@ def test_ibsi_ii_ph_i_4(
     sphere_phantom,
     ibsi_ii_response_maps_dir,
 ):
-    # pick the right fixture
-    phantom_data = {'impulse_phantom': impulse_phantom, 'sphere_phantom': sphere_phantom}[phantom]
-
-    filtering = create_filter(
-        filtering_method='Gabor',
-        padding_type=padding,
-        res_mm=res_mm,
-        sigma_mm=sigma_mm,
-        lambda_mm=lambda_mm,
-        gamma=gamma,
-        theta=theta,
-        rotation_invariance=rot_inv,
-        orthogonal_planes=orth_planes,
-        n_stds=n_stds,
+    case = _phase_i_case(config)
+    # Retain the published values in the parametrized test ID while making the
+    # shared registry authoritative for execution.
+    assert phantom == f'{case.phantom}_phantom'
+    assert (padding, res_mm, sigma_mm, lambda_mm, gamma, theta, rot_inv, orth_planes, n_stds, truth_file) == (
+        case.filter_params['padding_type'],
+        case.filter_params['res_mm'],
+        case.filter_params['sigma_mm'],
+        case.filter_params['lambda_mm'],
+        case.filter_params['gamma'],
+        case.filter_params['theta'],
+        case.filter_params['rotation_invariance'],
+        case.filter_params['orthogonal_planes'],
+        case.filter_params['n_stds'],
+        case.response_map,
     )
-    _run_ph_i_case(filtering, phantom_data, truth_file, config, ibsi_ii_response_maps_dir)
+    phantom_data = {'impulse': impulse_phantom, 'sphere': sphere_phantom}[case.phantom]
+    filtering = create_filter(filtering_method=case.filter_method, **dict(case.filter_params))
+    _run_ph_i_case(filtering, phantom_data, case.response_map, case.config, ibsi_ii_response_maps_dir)
 
 
 @pytest.mark.integration
 @pytest.mark.parametrize(
     ('config', 'params_and_images'),
-    list(
-        {
-            '5.a.1': ['constant', 'LHL', False, 'impulse_phantom', '5_a_1-ValidCRM.nii'],
-            '5.a.2': ['constant', 'LHL', True, 'impulse_phantom', '5_a_2-ValidCRM.nii'],
-        }.items()
-    ),
+    [
+        (
+            case.config,
+            [
+                case.filter_params['padding_type'],
+                case.filter_params['response_map'],
+                case.filter_params['rotation_invariance'],
+                f'{case.phantom}_phantom',
+                case.response_map,
+            ],
+        )
+        for case in _phase_i_cases('5.')
+    ],
 )
 def test_ibsi_ii_ph_i_5(ibsi_ii_response_maps_dir, request, config, params_and_images):
     params_and_images = list(params_and_images)
@@ -381,12 +423,19 @@ def test_ibsi_ii_ph_i_5(ibsi_ii_response_maps_dir, request, config, params_and_i
 @pytest.mark.integration
 @pytest.mark.parametrize(
     ('config', 'params_and_images'),
-    list(
-        {
-            '6.a.1': ['wrap', 'HHL', False, 'sphere_phantom', '6_a_1-ValidCRM.nii'],
-            '6.a.2': ['wrap', 'HHL', True, 'sphere_phantom', '6_a_2-ValidCRM.nii'],
-        }.items()
-    ),
+    [
+        (
+            case.config,
+            [
+                case.filter_params['padding_type'],
+                case.filter_params['response_map'],
+                case.filter_params['rotation_invariance'],
+                f'{case.phantom}_phantom',
+                case.response_map,
+            ],
+        )
+        for case in _phase_i_cases('6.')
+    ],
 )
 def test_ibsi_ii_ph_i_6(ibsi_ii_response_maps_dir, request, config, params_and_images):
     params_and_images = list(params_and_images)
@@ -406,12 +455,19 @@ def test_ibsi_ii_ph_i_6(ibsi_ii_response_maps_dir, request, config, params_and_i
 @pytest.mark.integration
 @pytest.mark.parametrize(
     ('config', 'params_and_images'),
-    list(
-        {
-            '7.a.1': ['reflect', 'LLL', False, 'checkerboard_phantom', '7_a_1-ValidCRM.nii'],
-            '7.a.2': ['reflect', 'HHH', True, 'checkerboard_phantom', '7_a_2-ValidCRM.nii'],
-        }.items()
-    ),
+    [
+        (
+            case.config,
+            [
+                case.filter_params['padding_type'],
+                case.filter_params['response_map'],
+                case.filter_params['rotation_invariance'],
+                f'{case.phantom}_phantom',
+                case.response_map,
+            ],
+        )
+        for case in _phase_i_cases('7.')
+    ],
 )
 def test_ibsi_ii_ph_i_7(ibsi_ii_response_maps_dir, request, config, params_and_images):
     params_and_images = list(params_and_images)
@@ -429,50 +485,29 @@ def test_ibsi_ii_ph_i_7(ibsi_ii_response_maps_dir, request, config, params_and_i
 
 
 @pytest.mark.integration
-@pytest.mark.parametrize('level', [1, 2, 3], ids=['8.a.1', '8.a.2', '8.a.3'])
-def test_ibsi_ii_ph_i_8(ibsi_ii_response_maps_dir, checkerboard_phantom, level):
-    filtering = create_filter(
-        filtering_method='Simoncelli', dimensionality='3D', padding_type='wrap', decomposition_level=level
-    )
-    _run_ph_i_case(
-        filtering, checkerboard_phantom, f'8_a_{level}-ValidCRM.nii', f'8.a.{level}', ibsi_ii_response_maps_dir
-    )
+@pytest.mark.parametrize('case', _phase_i_cases('8.'), ids=lambda case: case.config)
+def test_ibsi_ii_ph_i_8(ibsi_ii_response_maps_dir, checkerboard_phantom, case):
+    filtering = create_filter(filtering_method=case.filter_method, **dict(case.filter_params))
+    _run_ph_i_case(filtering, checkerboard_phantom, case.response_map, case.config, ibsi_ii_response_maps_dir)
 
 
 @pytest.mark.integration
-@pytest.mark.parametrize(
-    ('config', 'phantom', 'order', 'filename'),
-    [
-        ('9.a', 'impulse_phantom', (1, 0, 0), '9_a-ValidCRM.nii'),
-        ('9.b.1', 'sphere_phantom', (0, 2, 0), '9_b_1-ValidCRM.nii'),
-    ],
-)
-def test_ibsi_ii_ph_i_9(ibsi_ii_response_maps_dir, request, config, phantom, order, filename):
-    filtering = create_filter(
-        filtering_method='Riesz-transformed LoG',
-        dimensionality='3D',
-        padding_type='constant',
-        sigma_mm=3.0,
-        cutoff=4,
-        riesz_order=order,
-    )
-    _run_ph_i_case(filtering, request.getfixturevalue(phantom), filename, config, ibsi_ii_response_maps_dir)
+@pytest.mark.parametrize('case', _phase_i_cases('9.'), ids=lambda case: case.config)
+def test_ibsi_ii_ph_i_9(ibsi_ii_response_maps_dir, request, case):
+    filtering = create_filter(filtering_method=case.filter_method, **dict(case.filter_params))
+    phantom = request.getfixturevalue(f'{case.phantom}_phantom')
+    _run_ph_i_case(filtering, phantom, case.response_map, case.config, ibsi_ii_response_maps_dir)
 
 
 @pytest.mark.integration
 def test_ibsi_ii_ph_i_10(ibsi_ii_response_maps_dir, pattern_1_phantom):
-    filtering = create_filter(
-        filtering_method='Simoncelli',
-        dimensionality='3D',
-        padding_type='nearest',
-        decomposition_level=1,
-        riesz_order=(0, 2, 0),
-    )
+    case = _phase_i_cases('10.')[0]
+    filtering = create_filter(filtering_method=case.filter_method, **dict(case.filter_params))
     _run_ph_i_case(
         filtering,
         pattern_1_phantom,
-        '10_b_1-ValidCRM.nii',
-        '10.b.1',
+        case.response_map,
+        case.config,
         ibsi_ii_response_maps_dir,
     )
 
@@ -481,7 +516,7 @@ def test_ibsi_ii_ph_i_10(ibsi_ii_response_maps_dir, pattern_1_phantom):
 def test_ibsi_ii_ph_ii_2a(ct_phantom_image, ct_phantom_mask):
     ibsi_features = ibsi_ii_feature_tolerances('2.A')
 
-    filtering = create_filter(filtering_method='Mean', padding_type='reflect', dimensionality='2D', support=5)
+    filtering = _phase_ii_filter('2.A')
 
     filtered_image = filtering.apply(ct_phantom_image)
 
@@ -493,7 +528,7 @@ def test_ibsi_ii_ph_ii_2a(ct_phantom_image, ct_phantom_mask):
 def test_ibsi_ii_ph_ii_2b(res3d_1mm_image_spline, res3d_1mm_mask_linear):
     ibsi_features = ibsi_ii_feature_tolerances('2.B')
 
-    filtering = create_filter(filtering_method='Mean', padding_type='reflect', dimensionality='3D', support=5)
+    filtering = _phase_ii_filter('2.B')
 
     filtered_image = filtering.apply(res3d_1mm_image_spline)
 
@@ -505,9 +540,7 @@ def test_ibsi_ii_ph_ii_2b(res3d_1mm_image_spline, res3d_1mm_mask_linear):
 def test_ibsi_ii_ph_ii_3a(ct_phantom_image, ct_phantom_mask):
     ibsi_features = ibsi_ii_feature_tolerances('3.A')
 
-    filtering = create_filter(
-        filtering_method='Laplacian of Gaussian', padding_type='reflect', dimensionality='2D', sigma_mm=1.5, cutoff=4
-    )
+    filtering = _phase_ii_filter('3.A')
 
     filtered_image = filtering.apply(ct_phantom_image)
 
@@ -519,9 +552,7 @@ def test_ibsi_ii_ph_ii_3a(ct_phantom_image, ct_phantom_mask):
 def test_ibsi_ii_ph_ii_3b(res3d_1mm_image_spline, res3d_1mm_mask_linear):
     ibsi_features = ibsi_ii_feature_tolerances('3.B')
 
-    filtering = create_filter(
-        filtering_method='Laplacian of Gaussian', padding_type='reflect', dimensionality='3D', sigma_mm=1.5, cutoff=4
-    )
+    filtering = _phase_ii_filter('3.B')
 
     filtered_image = filtering.apply(res3d_1mm_image_spline)
 
@@ -533,16 +564,7 @@ def test_ibsi_ii_ph_ii_3b(res3d_1mm_image_spline, res3d_1mm_mask_linear):
 def test_ibsi_ii_ph_ii_4a(ct_phantom_image, ct_phantom_mask):
     ibsi_features = ibsi_ii_feature_tolerances('4.A')
 
-    filtering = create_filter(
-        filtering_method='Laws Kernels',
-        padding_type='reflect',
-        dimensionality='2D',
-        response_map='L5E5',
-        rotation_invariance=True,
-        pooling="max",
-        energy_map=True,
-        distance=7,
-    )
+    filtering = _phase_ii_filter('4.A')
 
     filtered_image = filtering.apply(ct_phantom_image)
 
@@ -554,16 +576,7 @@ def test_ibsi_ii_ph_ii_4a(ct_phantom_image, ct_phantom_mask):
 def test_ibsi_ii_ph_ii_4b(res3d_1mm_image_spline, res3d_1mm_mask_linear):
     ibsi_features = ibsi_ii_feature_tolerances('4.B')
 
-    filtering = create_filter(
-        filtering_method='Laws Kernels',
-        response_map="L5E5E5",
-        padding_type="reflect",
-        dimensionality="3D",
-        rotation_invariance=True,
-        pooling="max",
-        energy_map=True,
-        distance=7,
-    )
+    filtering = _phase_ii_filter('4.B')
 
     filtered_image = filtering.apply(res3d_1mm_image_spline)
 
@@ -576,18 +589,7 @@ def test_ibsi_ii_ph_ii_4b(res3d_1mm_image_spline, res3d_1mm_mask_linear):
 def test_ibsi_ii_ph_ii_5a(ct_phantom_image, ct_phantom_mask):
     ibsi_features = ibsi_ii_feature_tolerances('5.A')
 
-    filtering = create_filter(
-        filtering_method='Gabor',
-        padding_type='reflect',
-        dimensionality='2D',
-        res_mm=0.977,
-        sigma_mm=5.0,
-        lambda_mm=2.0,
-        gamma=3 / 2,
-        theta=np.pi / 8,
-        rotation_invariance=True,
-        orthogonal_planes=False,
-    )
+    filtering = _phase_ii_filter('5.A')
 
     filtered_image = filtering.apply(ct_phantom_image)
 
@@ -599,18 +601,7 @@ def test_ibsi_ii_ph_ii_5a(ct_phantom_image, ct_phantom_mask):
 def test_ibsi_ii_ph_ii_5b(res3d_1mm_image_spline, res3d_1mm_mask_linear):
     ibsi_features = ibsi_ii_feature_tolerances('5.B')
 
-    filtering = create_filter(
-        filtering_method='Gabor',
-        padding_type="reflect",
-        dimensionality="3D",
-        res_mm=1.0,
-        sigma_mm=5.0,
-        lambda_mm=2.0,
-        gamma=3 / 2,
-        theta=np.pi / 8,
-        rotation_invariance=True,
-        orthogonal_planes=True,
-    )
+    filtering = _phase_ii_filter('5.B')
 
     filtered_image = filtering.apply(res3d_1mm_image_spline)
 
@@ -622,15 +613,7 @@ def test_ibsi_ii_ph_ii_5b(res3d_1mm_image_spline, res3d_1mm_mask_linear):
 def test_ibsi_ii_ph_ii_6a(ct_phantom_image, ct_phantom_mask):
     ibsi_features = ibsi_ii_feature_tolerances('6.A')
 
-    filtering = create_filter(
-        filtering_method='Wavelets',
-        wavelet_type="db3",
-        dimensionality='2D',
-        padding_type="reflect",
-        response_map="LH",
-        decomposition_level=1,
-        rotation_invariance=True,
-    )
+    filtering = _phase_ii_filter('6.A')
 
     filtered_image = filtering.apply(ct_phantom_image)
 
@@ -642,15 +625,7 @@ def test_ibsi_ii_ph_ii_6a(ct_phantom_image, ct_phantom_mask):
 def test_ibsi_ii_ph_ii_6b(res3d_1mm_image_spline, res3d_1mm_mask_linear):
     ibsi_features = ibsi_ii_feature_tolerances('6.B')
 
-    filtering = create_filter(
-        filtering_method='Wavelets',
-        wavelet_type="db3",
-        dimensionality='3D',
-        padding_type="reflect",
-        response_map="LLH",
-        decomposition_level=1,
-        rotation_invariance=True,
-    )
+    filtering = _phase_ii_filter('6.B')
 
     filtered_image = filtering.apply(res3d_1mm_image_spline)
 
@@ -662,15 +637,7 @@ def test_ibsi_ii_ph_ii_6b(res3d_1mm_image_spline, res3d_1mm_mask_linear):
 def test_ibsi_ii_ph_ii_7a(ct_phantom_image, ct_phantom_mask):
     ibsi_features = ibsi_ii_feature_tolerances('7.A')
 
-    filtering = create_filter(
-        filtering_method='Wavelets',
-        wavelet_type="db3",
-        dimensionality='2D',
-        padding_type="reflect",
-        response_map="HH",
-        decomposition_level=2,
-        rotation_invariance=True,
-    )
+    filtering = _phase_ii_filter('7.A')
 
     filtered_image = filtering.apply(ct_phantom_image)
 
@@ -682,15 +649,7 @@ def test_ibsi_ii_ph_ii_7a(ct_phantom_image, ct_phantom_mask):
 def test_ibsi_ii_ph_ii_7b(res3d_1mm_image_spline, res3d_1mm_mask_linear):
     ibsi_features = ibsi_ii_feature_tolerances('7.B')
 
-    filtering = create_filter(
-        filtering_method='Wavelets',
-        wavelet_type="db3",
-        dimensionality='3D',
-        padding_type="reflect",
-        response_map="HHH",
-        decomposition_level=2,
-        rotation_invariance=True,
-    )
+    filtering = _phase_ii_filter('7.B')
 
     filtered_image = filtering.apply(res3d_1mm_image_spline)
 
@@ -702,9 +661,7 @@ def test_ibsi_ii_ph_ii_7b(res3d_1mm_image_spline, res3d_1mm_mask_linear):
 def test_ibsi_ii_ph_ii_8a(ct_phantom_image, ct_phantom_mask):
     ibsi_features = ibsi_ii_feature_tolerances('8.A')
 
-    filtering = create_filter(
-        filtering_method='Simoncelli', padding_type='periodic', decomposition_level=1, dimensionality='2D'
-    )
+    filtering = _phase_ii_filter('8.A')
 
     filtered_image = filtering.apply(ct_phantom_image)
 
@@ -716,9 +673,7 @@ def test_ibsi_ii_ph_ii_8a(ct_phantom_image, ct_phantom_mask):
 def test_ibsi_ii_ph_ii_8b(res3d_1mm_image_spline, res3d_1mm_mask_linear):
     ibsi_features = ibsi_ii_feature_tolerances('8.B')
 
-    filtering = create_filter(
-        filtering_method='Simoncelli', padding_type='periodic', decomposition_level=1, dimensionality='3D'
-    )
+    filtering = _phase_ii_filter('8.B')
 
     filtered_image = filtering.apply(res3d_1mm_image_spline)
 
@@ -730,9 +685,7 @@ def test_ibsi_ii_ph_ii_8b(res3d_1mm_image_spline, res3d_1mm_mask_linear):
 def test_ibsi_ii_ph_ii_9a(ct_phantom_image, ct_phantom_mask):
     ibsi_features = ibsi_ii_feature_tolerances('9.A')
 
-    filtering = create_filter(
-        filtering_method='Simoncelli', padding_type='periodic', decomposition_level=2, dimensionality='2D'
-    )
+    filtering = _phase_ii_filter('9.A')
 
     filtered_image = filtering.apply(ct_phantom_image)
 
@@ -744,9 +697,7 @@ def test_ibsi_ii_ph_ii_9a(ct_phantom_image, ct_phantom_mask):
 def test_ibsi_ii_ph_ii_9b(res3d_1mm_image_spline, res3d_1mm_mask_linear):
     ibsi_features = ibsi_ii_feature_tolerances('9.B')
 
-    filtering = create_filter(
-        filtering_method='Simoncelli', padding_type='periodic', decomposition_level=2, dimensionality='3D'
-    )
+    filtering = _phase_ii_filter('9.B')
 
     filtered_image = filtering.apply(res3d_1mm_image_spline)
 
@@ -758,8 +709,13 @@ def test_ibsi_ii_ph_ii_9b(res3d_1mm_image_spline, res3d_1mm_mask_linear):
 @pytest.mark.parametrize(
     ('config', 'image_fixture', 'mask_fixture'),
     [
-        ('1.A', 'ct_phantom_image', 'ct_phantom_mask'),
-        ('1.B', 'res3d_1mm_image_spline', 'res3d_1mm_mask_linear'),
+        (
+            case.config,
+            'res3d_1mm_image_spline' if case.resampling_dim else 'ct_phantom_image',
+            'res3d_1mm_mask_linear' if case.resampling_dim else 'ct_phantom_mask',
+        )
+        for case in IBSI_II_FEATURE_CASES
+        if case.config.startswith('1.')
     ],
 )
 def test_ibsi_ii_ph_ii_unfiltered(request, config, image_fixture, mask_fixture):
